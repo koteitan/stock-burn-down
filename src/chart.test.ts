@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { actualPoints, countTicks, dateTicks, dayOfTime, expiryPoints, expiryUnits } from './chart';
+import {
+  actualPoints,
+  chartEnd,
+  countTicks,
+  dateTicks,
+  dayOfTime,
+  expiryPoints,
+  expiryUnits,
+} from './chart';
 import { fromDay, toDay } from './date';
 import type { ConsumeRecord, StockItem } from './types';
 
@@ -116,6 +124,29 @@ describe('all categories (overall chart)', () => {
     expect(actualPoints(history, null, start, now, units.length).map((p) => p.value)).toEqual([
       5, 4, 3, 3,
     ]);
+  });
+});
+
+describe('chartEnd', () => {
+  const units = [
+    { day: toDay('2027-01-10'), category: 'A', content: '' },
+    { day: toDay('2027-06-01'), category: 'A', content: '' },
+  ];
+  const today = toDay('2026-11-08');
+
+  it('is the last best-before date when the end is empty', () => {
+    expect(fromDay(chartEnd(start, null, units, today))).toBe('2027-06-01');
+  });
+
+  it('is the end or the last best-before date, whichever is earlier', () => {
+    expect(fromDay(chartEnd(start, toDay('2027-03-01'), units, today))).toBe('2027-03-01');
+    expect(fromDay(chartEnd(start, toDay('2028-01-01'), units, today))).toBe('2027-06-01');
+    expect(chartEnd(start, start, units, today)).toBe(start);
+  });
+
+  it('ignores an end before the start and falls back to today without any best-before', () => {
+    expect(fromDay(chartEnd(start, toDay('2026-10-01'), units, today))).toBe('2027-06-01');
+    expect(fromDay(chartEnd(start, null, [], today))).toBe('2026-11-08');
   });
 });
 

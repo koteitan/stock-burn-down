@@ -9,10 +9,13 @@ import {
   updatedAtOf,
 } from '../lists';
 import { newId, sanitizeLists } from '../sanitize';
-import { EMPTY_LISTS, type Lists, type NostrStatus } from '../types';
+import { EMPTY_LISTS, type Lists, type NostrStatus, type NostrUser } from '../types';
+import { npubEncode } from './bech32';
 import { rxNostr } from './client';
 import { fetchWriteRelays } from './discovery';
-import { decryptFromSelf, encryptToSelf, waitForNip07 } from './nip07';
+import { fetchProfile } from './profile';
+import { BOOTSTRAP_RELAYS } from './relays';
+import { decryptFromSelf, encryptToSelf, isNip04, waitForNip07 } from './nip07';
 
 export const APP_KIND = 30078;
 export const D_PREFIX = 'stock-burn-down/';
@@ -24,8 +27,51 @@ interface RemoteCategory {
   lists: Lists;
 }
 
+/** One category as merged from every event that decrypts to it. */
+interface MergedCategory extends RemoteCategory {
+  /** Other d tags of the same category that still hold items; emptied on the next save. */
+  others: string[];
+}
+
+/**
+ * Merges events of the same category (C): items are united by id, newer events first;
+ * the target of the newest event that has one wins; the newest event is the primary.
+ */
+export function mergeCategory(events: RemoteCategory[]): MergedCategory {
+  const sorted = [...events].sort((a, b) => b.createdAt - a.createdAt);
+  const [primary] = sorted;
+  const lists: Lists = { stocks: [], targets: [], history: [], updatedAt: {} };
+  const stockIds = new Set<string>();
+  const recordIds = new Set<string>();
+  let time = 0;
+  for (const e of sorted) {
+    for (const s of e.lists.stocks) {
+      if (stockIds.has(s.id)) continue;
+      stockIds.add(s.id);
+      lists.stocks.push(s);
+    }
+    for (const h of e.lists.history) {
+      if (recordIds.has(h.id)) continue;
+      recordIds.add(h.id);
+      lists.history.push(h);
+    }
+    if (lists.targets.length === 0) lists.targets.push(...e.lists.targets.slice(0, 1));
+    time = Math.max(time, updatedAtOf(e.lists, e.category));
+  }
+  lists.updatedAt = Object.fromEntries([[primary.category, time]]);
+  return {
+    ...primary,
+    lists,
+    others: sorted
+      .slice(1)
+      .filter((e) => !isEmptyLists(e.lists))
+      .map((e) => e.d),
+  };
+}
+
 export interface NostrSyncCallbacks {
   onStatus(status: NostrStatus): void;
+  onUser(user: NostrUser): void;
   /** Called while loading, every time a decrypted event changes what is on the relays. */
   onRemoteLists(lists: Lists): void;
   /** Loading finished; from now on `update()` publishes. */
@@ -102,6 +148,13 @@ export class NostrSync {
   private flushing = false;
   private flushAgain = false;
   private cb: NostrSyncCallbacks;
+  private user: NostrUser | null = null;
+  private profileAt = 0;
+  private stopProfile: (() => void)[] = [];
+  /** d tag → error, for events of this site that could not be read. */
+  private unreadable = new Map<string, string>();
+  /** d tags whose newest event is NIP-44; rewritten in NIP-04 so every device can read them. */
+  private nip44 = new Set<string>();
 
   constructor(callbacks: NostrSyncCallbacks) {
     this.cb = callbacks;
@@ -122,14 +175,23 @@ export class NostrSync {
     }
     if (this.stopped) return;
     this.pubkey = pubkey;
+    this.setUser({ npub: npubEncode(pubkey), name: null, received: 0, unreadable: 0, error: null });
+    const onProfile = (name: string, createdAt: number) => {
+      if (this.stopped || createdAt <= this.profileAt) return;
+      this.profileAt = createdAt;
+      this.setUser({ name });
+    };
+    this.stopProfile.push(fetchProfile(pubkey, BOOTSTRAP_RELAYS, onProfile));
     this.relays = await fetchWriteRelays(pubkey);
     if (this.stopped) return;
     this.fetchData(pubkey);
+    this.stopProfile.push(fetchProfile(pubkey, this.relays, onProfile));
   }
 
   stop(): void {
     this.stopped = true;
     this.sub?.unsubscribe();
+    for (const stop of this.stopProfile) stop();
     if (this.timer !== null) clearTimeout(this.timer);
   }
 
@@ -153,6 +215,11 @@ export class NostrSync {
       finished = true;
       await this.decrypting;
       if (this.stopped) return;
+      if (this.unreadable.size > 0) {
+        // Saving now could hide what we cannot read (A), so stay read-only.
+        this.cb.onStatus('undecryptable');
+        return;
+      }
       this.ready = true;
       this.cb.onStatus(total === 0 ? 'no-events' : ours === 0 ? 'no-stock' : 'received');
       this.cb.onReady();
@@ -169,6 +236,7 @@ export class NostrSync {
           const d = event.tags.find((t) => t[0] === 'd')?.[1] ?? '';
           if (!d.startsWith(D_PREFIX)) return;
           ours++;
+          this.setUser({ received: ours });
           this.maxCreatedAt.set(d, Math.max(this.maxCreatedAt.get(d) ?? 0, event.created_at));
           this.decrypting = this.decrypting.then(() => this.absorb(event, d));
         },
@@ -177,6 +245,19 @@ export class NostrSync {
       });
     req.emit({ kinds: [APP_KIND], authors: [pubkey] });
     req.over();
+  }
+
+  private setUser(patch: Partial<NostrUser>) {
+    this.user = {
+      npub: '',
+      name: null,
+      received: 0,
+      unreadable: 0,
+      error: null,
+      ...this.user,
+      ...patch,
+    };
+    this.cb.onUser(this.user);
   }
 
   private async absorb(event: Nostr.Event, d: string) {
@@ -188,22 +269,28 @@ export class NostrSync {
         await decryptFromSelf(this.pubkey, event.content),
         event.created_at * 1000,
       );
-      if (!parsed || this.stopped) return;
+      if (!parsed) throw new Error('not a stock-burn-down payload');
+      if (this.stopped) return;
       this.remote.set(d, { d, createdAt: event.created_at, ...parsed });
+      this.unreadable.delete(d);
+      if (isNip04(event.content)) this.nip44.delete(d);
+      else this.nip44.add(d);
       this.cb.onRemoteLists(this.remoteLists());
     } catch (e) {
       console.warn('stock-burn-down: cannot read event', d, e);
+      const message = (e instanceof Error ? e.message : String(e)).slice(0, 160);
+      this.unreadable.set(d, message);
     }
+    const errors = [...this.unreadable.values()];
+    this.setUser({ unreadable: errors.length, error: errors[0] ?? null });
   }
 
-  /** If two d tags decrypt to the same category, the newer event wins. */
-  private byCategory(): Map<string, RemoteCategory> {
-    const map = new Map<string, RemoteCategory>();
+  private byCategory(): Map<string, MergedCategory> {
+    const groups = new Map<string, RemoteCategory[]>();
     for (const r of this.remote.values()) {
-      const prev = map.get(r.category);
-      if (!prev || prev.createdAt < r.createdAt) map.set(r.category, r);
+      groups.set(r.category, [...(groups.get(r.category) ?? []), r]);
     }
-    return map;
+    return new Map([...groups].map(([cat, events]) => [cat, mergeCategory(events)]));
   }
 
   private remoteLists(): Lists {
@@ -225,6 +312,7 @@ export class NostrSync {
     const remote = this.byCategory();
     const cats = new Set([...categoriesOf(desired), ...remote.keys()]);
     return [...cats].filter((cat) => {
+      if (this.nip44Of(cat).length > 0) return true;
       const want = listsOfCategory(desired, cat);
       const have = remote.get(cat)?.lists ?? EMPTY_LISTS;
       // An emptied category only needs publishing while the relays still hold its items.
@@ -261,13 +349,36 @@ export class NostrSync {
     if (!failed && this.pendingCategories().length === 0) this.cb.onSynced();
   }
 
+  /** d tags of the category still held in NIP-44. */
+  private nip44Of(category: string): string[] {
+    return [...this.remote.values()]
+      .filter((r) => r.category === category && this.nip44.has(r.d))
+      .map((r) => r.d);
+  }
+
+  /**
+   * Writes the category to its primary d tag, then empties its other d tags that still hold
+   * items (C) or are still NIP-44.
+   */
   private async publish(category: string, lists: Lists): Promise<boolean> {
-    const pubkey = this.pubkey!;
-    let d = this.byCategory().get(category)?.d ?? this.newD.get(category);
+    const merged = this.byCategory().get(category);
+    let d = merged?.d ?? this.newD.get(category);
     if (!d) {
       d = D_PREFIX + newId();
       this.newD.set(category, d);
     }
+    const others = new Set([...(merged?.others ?? []), ...this.nip44Of(category)]);
+    others.delete(d);
+    let ok = await this.publishTo(d, category, lists);
+    for (const other of others) {
+      if (!ok) break;
+      ok = await this.publishTo(other, category, EMPTY_LISTS);
+    }
+    return ok;
+  }
+
+  private async publishTo(d: string, category: string, lists: Lists): Promise<boolean> {
+    const pubkey = this.pubkey!;
     const json = serializeCategory(category, lists);
     const content = await encryptToSelf(pubkey, json);
     // Replaceable events with equal created_at are resolved by id, so always move forward.
@@ -277,6 +388,7 @@ export class NostrSync {
       this.relays,
     );
     if (ok) {
+      this.nip44.delete(d);
       this.maxCreatedAt.set(d, createdAt);
       this.remote.set(d, { d, createdAt, ...parseCategory(json)! });
     }

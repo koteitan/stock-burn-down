@@ -10,6 +10,7 @@ import {
   type ConsumeRecord,
   type Lists,
   type NostrStatus,
+  type NostrUser,
   type Settings,
   type StockItem,
   type TargetItem,
@@ -25,6 +26,7 @@ export function useStore() {
   const [lists, setLists] = useState<Lists>(initial.lists ?? EMPTY_LISTS);
   const [pending, setPending] = useState<Lists | null>(initial.pendingUpload);
   const [nostrStatus, setNostrStatus] = useState<NostrStatus | null>(null);
+  const [nostrUser, setNostrUser] = useState<NostrUser | null>(null);
   const [nostrReady, setNostrReady] = useState(false);
   const syncRef = useRef<NostrSync | null>(null);
   const pendingRef = useRef(pending);
@@ -38,6 +40,7 @@ export function useStore() {
     if (settings.storage !== 'nostr') return;
     const sync = new NostrSync({
       onStatus: setNostrStatus,
+      onUser: setNostrUser,
       onRemoteLists: setLists,
       onReady: () => {
         const p = pendingRef.current;
@@ -72,6 +75,7 @@ export function useStore() {
       if (next.storage !== settings.storage) {
         setNostrReady(false);
         setNostrStatus(null);
+        setNostrUser(null);
         if (next.storage === 'nostr') {
           const carried = pending ? mergeLists(lists, pending) : lists;
           setPending(isEmptyLists(carried) ? null : carried);
@@ -152,5 +156,5 @@ export function useStore() {
       })),
   };
 
-  return { settings, updateSettings, lists, nostrStatus, editable, actions };
+  return { settings, updateSettings, lists, nostrStatus, nostrUser, editable, actions };
 }

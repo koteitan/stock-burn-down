@@ -8,17 +8,21 @@ export async function waitForNip07(timeoutMs = 3000): Promise<boolean> {
   return true;
 }
 
+/** Always NIP-04: some extensions (e.g. Nostore) have no NIP-44, and every device must read it. */
 export async function encryptToSelf(pubkey: string, plaintext: string): Promise<string> {
   const n = window.nostr;
-  if (n?.nip44) return n.nip44.encrypt(pubkey, plaintext);
-  if (n?.nip04) return n.nip04.encrypt(pubkey, plaintext);
-  throw new Error('The NIP-07 extension supports neither NIP-44 nor NIP-04 encryption');
+  if (!n?.nip04) throw new Error('NIP-04 encryption is not available');
+  return n.nip04.encrypt(pubkey, plaintext);
+}
+
+export function isNip04(ciphertext: string): boolean {
+  return ciphertext.includes('?iv=');
 }
 
 export async function decryptFromSelf(pubkey: string, ciphertext: string): Promise<string> {
   const n = window.nostr;
   // NIP-04 payloads are "<base64>?iv=<base64>"; NIP-44 payloads are plain base64.
-  if (ciphertext.includes('?iv=')) {
+  if (isNip04(ciphertext)) {
     if (!n?.nip04) throw new Error('NIP-04 decryption is not available');
     return n.nip04.decrypt(pubkey, ciphertext);
   }

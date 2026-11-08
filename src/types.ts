@@ -57,12 +57,14 @@ export interface Settings {
   theme: Theme;
   lang: Lang;
   storage: StorageMode;
-  /** Chart start date (YYYY-MM-DD), shared by all charts. */
+  /** Chart range (YYYY-MM-DD), shared by all charts; an empty end means the last best-before. */
   chartStart: string;
+  chartEnd: string;
   stockSort: StockSort;
 }
 
 export const DEFAULT_SETTINGS: Omit<Settings, 'chartStart'> = {
+  chartEnd: '',
   theme: 'dark',
   lang: 'ja',
   storage: 'browser',
@@ -71,12 +73,26 @@ export const DEFAULT_SETTINGS: Omit<Settings, 'chartStart'> = {
 
 export const EMPTY_LISTS: Lists = { stocks: [], targets: [], history: [], updatedAt: {} };
 
+/** The signed-in nostr user as shown in the status. */
+export interface NostrUser {
+  npub: string;
+  /** Profile name (kind:0), or null until one arrives. */
+  name: string | null;
+  /** Events of this site received so far. */
+  received: number;
+  /** Events of this site that could not be decrypted or parsed. */
+  unreadable: number;
+  /** The first decrypt/parse error, for the status. */
+  error: string | null;
+}
+
 export type NostrStatus =
   | 'no-nip07'
   | 'loading'
   | 'no-events'
   | 'no-stock'
   | 'received'
+  | 'undecryptable'
   | 'saving'
   | 'saved'
   | 'save-error';

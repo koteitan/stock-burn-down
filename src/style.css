@@ -81,12 +81,14 @@ a {
 }
 
 .status-no-nip07,
-.status-save-error {
+.status-save-error,
+.status-undecryptable {
   color: var(--text);
 }
 
 .status-no-nip07::before,
-.status-save-error::before {
+.status-save-error::before,
+.status-undecryptable::before {
   content: '⚠ ';
   color: var(--critical);
 }
@@ -191,14 +193,12 @@ h2 {
 }
 
 /* charts */
-.chart-start {
-  margin-bottom: 12px;
-}
-
-.chart-start label {
-  display: inline-flex;
+.chart-range {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  margin-bottom: 12px;
 }
 
 .charts {
@@ -595,4 +595,20 @@ tr.editing td {
     flex-basis: 100%;
     text-align: left;
   }
+}
+
+/* error boundary */
+.crash {
+  max-width: 720px;
+  margin: 40px auto;
+  padding: 16px;
+}
+
+.crash pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
 }

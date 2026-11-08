@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { AddStockForm } from './components/AddStockForm';
 import { CategoryList } from './components/CategoryList';
 import { Charts } from './components/Charts';
@@ -9,9 +9,12 @@ import { StockTable } from './components/StockTable';
 import { TargetSection } from './components/TargetSection';
 import { toDay } from './date';
 import { forcedLang, todayNow } from './debug';
+import { shortNpub } from './nostr/bech32';
 import { categoriesByUpdate, categoriesOf } from './lists';
 import type { Theme } from './types';
 import { useStore } from './useStore';
+
+const NIP07_GUIDE_URL = 'https://welcome.nostr-jp.org/tutorial/nip-07.html';
 
 function useTheme(theme: Theme) {
   useEffect(() => {
@@ -29,7 +32,7 @@ function useTheme(theme: Theme) {
 
 export function App() {
   const { t, i18n } = useTranslation();
-  const { settings, updateSettings, lists, nostrStatus, editable, actions } = useStore();
+  const { settings, updateSettings, lists, nostrStatus, nostrUser, editable, actions } = useStore();
   const today = useMemo(() => toDay(todayNow()), []);
   const categories = categoriesOf(lists);
 
@@ -52,7 +55,27 @@ export function App() {
         <h1>{t('title')}</h1>
         {status && (
           <span className={`nostr-status status-${status}`} role="status">
-            {t(`status.${status}`)}
+            {status === 'no-nip07' ? (
+              <Trans
+                i18nKey="status.no-nip07"
+                components={{
+                  // Not <link>: it is a void HTML element, so the parser would drop its text.
+                  guide: <a href={NIP07_GUIDE_URL} target="_blank" rel="noreferrer" />,
+                }}
+              />
+            ) : status === 'received' && nostrUser ? (
+              t('status.receivedAs', {
+                name: nostrUser.name ?? shortNpub(nostrUser.npub),
+                n: nostrUser.received,
+              })
+            ) : status === 'undecryptable' && nostrUser ? (
+              t('status.undecryptableN', {
+                n: nostrUser.unreadable,
+                error: nostrUser.error ?? '',
+              })
+            ) : (
+              t(`status.${status}`)
+            )}
           </span>
         )}
         <Menu settings={settings} onChange={updateSettings} />
@@ -61,12 +84,14 @@ export function App() {
         <Charts
           lists={lists}
           chartStart={settings.chartStart}
-          onChartStartChange={(chartStart) => updateSettings({ chartStart })}
+          chartEnd={settings.chartEnd}
+          onRangeChange={updateSettings}
         />
 
         <h2>{t('section.add')}</h2>
         <AddStockForm disabled={!editable} onAdd={actions.addStock} />
         {!editable && status === 'loading' && <p className="note">{t('readOnly')}</p>}
+        {status === 'undecryptable' && <p className="note">{t('readOnlyUnreadable')}</p>}
 
         <h2>{t('section.stocks')}</h2>
         <StockTable

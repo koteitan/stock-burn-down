@@ -29,7 +29,11 @@ Site: https://koteitan.github.io/stock-burn-down/
 - Best-before dates are shown as YY/MM/DD (in the consumption history as well).
 
 ### Reading the charts
-One chart per category is drawn from the "Chart start" date (start) above the charts. The most recently updated category comes first. The vertical axis is the stock count, and every line falls monotonically from (start, N), where N is the stock at start (current stock + quantity consumed since start).
+One chart per category is drawn over the "Chart range [start] -- [end]" above the charts. The most recently updated category comes first.
+- The left edge is start (the chart start date).
+- The right edge is the chart's last best-before date when end is empty, or the earlier of end and that date otherwise (that day included). Lines outside the range are clipped.
+
+ The vertical axis is the stock count, and every line falls monotonically from (start, N), where N is the stock at start (current stock + quantity consumed since start).
 
 - Blue line (Consumed): the actual stock.
   - (start, N) -- (t₁, N-c₁) -- (t₂, N-c₁-c₂) -- ... -- (now, N-C)
@@ -57,11 +61,12 @@ When the storage is nostr, a status is shown next to the title.
 
 | Status | Meaning |
 |---|---|
-| Not signed in to nostr. Connect with a nostr browser extension. | No NIP-07 extension was found, or it refused to give the public key |
+| Not signed in to nostr. Connect with a nostr browser extension. ("browser extension" links to [a NIP-07 guide](https://welcome.nostr-jp.org/tutorial/nip-07.html)) | No NIP-07 extension was found, or it refused to give the public key |
 | Loading from nostr | Fetching from relays (editing is disabled until loading finishes) |
 | No nostr events found | You have no kind:30078 events |
 | No stock list found | You have kind:30078 events, but none from this site |
-| Received | Loading finished |
+| Received xx events as [name] | Loading finished. name is the kind:0 display_name (or name; a shortened npub until it arrives), and xx is the number of this site's events received |
+| n events cannot be decrypted: (error) | Some events of this site cannot be decrypted (e.g. NIP-44 events read with an extension that has no NIP-44). Editing and saving are stopped so their contents are not overwritten. Opening the site once on a device with NIP-44 rewrites them in NIP-04 so they become readable |
 | Saving to nostr / Saved to nostr / Failed to save to nostr | Save state (after a failure, the next change retries) |
 
 ## Site maintenance
@@ -107,6 +112,7 @@ The key `stock-burn-down` holds this JSON:
     "lang": "ja",
     "storage": "browser",
     "chartStart": "2026-11-01",
+    "chartEnd": "",
     "stockSort": {
       "order": ["expiry", "category", "added"],
       "desc": { "expiry": false, "category": false, "added": false }
@@ -138,7 +144,7 @@ The key `stock-burn-down` holds this JSON:
 ```
 
 - `settings.stockSort` is the stock list order (`order` lists the keys by priority; `desc` tells whether each is descending).
-- `settings.chartStart` is the chart start date. It is kept in localStorage even when the storage is nostr (it is not saved to nostr).
+- `settings.chartStart` / `settings.chartEnd` are the start and end of the chart range (`chartEnd` may be empty). They are kept in localStorage even when the storage is nostr (not saved to nostr).
 - `history` is the consumption history. `at` is the consumption time (Unix milliseconds).
 - `updatedAt` is the last update time per category (Unix milliseconds) and decides the chart order.
 - When the storage is nostr, only `settings` is stored. After switching from browser to nostr, however, the browser's data stays in `pendingUpload` until it has been saved to nostr.
@@ -146,7 +152,7 @@ The key `stock-burn-down` holds this JSON:
 #### nostr
 - One kind:30078 event per category. Each event holds that category's stock list, target and consumption history.
 - The `d` tag is `stock-burn-down/<random UUID>`. The d tag is not encrypted, so it does not contain the category name.
-- The content is the following JSON encrypted to yourself with NIP-44 (NIP-04 if the extension lacks NIP-44):
+- The content is the following JSON encrypted to yourself with NIP-04. NIP-04 is always used so that extensions without NIP-44 (such as Nostore) can read it. Events that earlier versions saved in NIP-44 are rewritten in NIP-04 when the site is opened on a device that has NIP-44:
 
 ```json
 {
@@ -165,6 +171,7 @@ The key `stock-burn-down` holds this JSON:
 
 - Loading: `{"kinds":[30078],"authors":[<your pubkey>]}` is fetched with rx-nostr's backward strategy from your kind:10002 write relays (or the kind:3 relays, or default relays if neither exists). Each event is shown as soon as it arrives, without waiting for the rest.
 - Saving: one second after a change, only the categories whose content changed are published. An emptied category is overwritten with empty lists.
+- When several events hold the same category (e.g. another device created it under a different d tag), their items are united by id and the newest event's target is used. The next save of that category writes to the newest event's d tag and overwrites the others with empty lists, leaving one event.
 
 ## License
 MIT License. See [LICENSE](LICENSE).

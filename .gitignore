@@ -2,3 +2,5 @@ node_modules
 dist
 *.local
 commit-msg.txt
+requirements.md
+questions.md

@@ -1,8 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   actualPoints,
   countTicks,
+  chartEnd,
   dateTicks,
   dayOfTime,
   expiryPoints,
@@ -105,8 +114,10 @@ interface ChartProps {
   title: string;
   lists: Lists;
   goal: number | null;
-  /** Chart start day. */
+  /** Chart range start day. */
   start: number;
+  /** Chart range end day, or null for the last best-before date. */
+  end: number | null;
   /** Current time as a fractional day. */
   now: number;
 }
@@ -134,7 +145,8 @@ const path = (pts: ChartPoint[], x: (v: number) => number, y: (v: number) => num
   pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.x)},${y(p.value)}`).join('');
 
 export function ChartBody(props: ChartProps & { width: number }) {
-  const { category, title, lists, goal, start, now, width } = props;
+  const { category, title, lists, goal, start, end, now, width } = props;
+  const clipId = useId();
   const { t } = useTranslation();
   const [active, setActive] = useState<number | null>(null);
   const today = Math.floor(now);
@@ -148,6 +160,9 @@ export function ChartBody(props: ChartProps & { width: number }) {
     [lists.history, category, start],
   );
   const expiry = useMemo(() => expiryPoints(units, start), [units, start]);
+  // The visible range is [start, last + 1): the whole last day is shown.
+  const last = chartEnd(start, end, units, today) + 1;
+  const visible = (day: number) => day >= start && day < last;
   const actual = useMemo(
     () => actualPoints(lists.history, category, start, now, units.length),
     [lists.history, category, start, now, units.length],
@@ -162,6 +177,7 @@ export function ChartBody(props: ChartProps & { width: number }) {
     const name = (item: { category: string; content: string }) =>
       item.content.trim() || item.category || t('noCategory');
     return [...days]
+      .filter(visible)
       .sort((a, b) => a - b)
       .map((day): Group => ({
         day,
@@ -180,37 +196,34 @@ export function ChartBody(props: ChartProps & { width: number }) {
             .flatMap((r) => Array<string>(r.count).fill(name(r))),
         ),
       }));
-  }, [units, records, start, today, n, t]);
+  }, [units, records, start, last, today, n, t]);
 
   const plotW = Math.max(0, width - M.left - M.right);
   const plotH = HEIGHT - M.top - M.bottom;
 
-  const xs = [...expiry, ...actual].map((p) => p.x);
-  let minX = Math.min(start, today);
-  let maxX = Math.max(now, ...xs);
-  if (maxX - minX < 14) maxX = minX + 14;
-  const pad = Math.max(0.5, (maxX - minX) * 0.03);
-  minX -= pad;
-  maxX += pad;
+  const pad = Math.max(0.2, (last - start) * 0.03);
+  const minX = start - pad;
+  const maxX = last + pad;
   const x = (day: number) => M.left + ((day - minX) / (maxX - minX)) * plotW;
 
   const yTicks = countTicks(Math.max(n, goal ?? 0, 1));
   const yMax = yTicks[yTicks.length - 1];
   const y = (v: number) => M.top + (1 - v / yMax) * plotH;
 
-  const xTicks = dateTicks(Math.ceil(minX), Math.floor(maxX), Math.max(2, Math.floor(plotW / 64)));
+  const xTicks = dateTicks(start, last - 1, Math.max(2, Math.floor(plotW / 64)));
+  const showToday = visible(now);
 
   // When one unit is too short for a dot, a run of same-x points shows dots only at its ends.
   const dense = plotH / yMax < 10;
   const dots = (pts: ChartPoint[]) =>
     pts.filter((p, i) => !dense || i === 0 || pts[i - 1].x !== p.x || pts[i + 1]?.x !== p.x);
 
-  const last = actual[actual.length - 1];
+  const lastActual = actual[actual.length - 1];
   const valueW = textWidth(String(stockNow), VALUE_FONT);
-  const valueRight = x(last.x) + 6 + valueW <= width - 2;
+  const valueRight = x(lastActual.x) + 6 + valueW <= width - 2;
   const valueLabel = {
-    x: valueRight ? x(last.x) + 6 : x(last.x) - 6,
-    y: y(last.value) - 8,
+    x: valueRight ? x(lastActual.x) + 6 : x(lastActual.x) - 6,
+    y: y(lastActual.value) - 8,
     anchor: valueRight ? ('start' as const) : ('end' as const),
   };
 
@@ -237,7 +250,7 @@ export function ChartBody(props: ChartProps & { width: number }) {
     }
     segments.push([x(now), M.top, x(now), y(0)]);
     for (const p of expiry) {
-      if (!p.label) continue;
+      if (!p.label || !visible(p.x)) continue;
       const w = textWidth(p.label, LABEL_FONT);
       const px = x(p.x);
       const py = y(p.value);
@@ -341,32 +354,50 @@ export function ChartBody(props: ChartProps & { width: number }) {
           </text>
         ))}
 
-        <line className="today" x1={x(now)} x2={x(now)} y1={M.top} y2={y(0)} />
-        <text className="today-label" x={x(now) - 4} y={M.top - 8} textAnchor="end">
-          {t('chart.today')}
-        </text>
-
-        {goal !== null && (
-          <line className="target-line" x1={M.left} x2={M.left + plotW} y1={y(goal)} y2={y(goal)} />
+        {showToday && (
+          <>
+            <line className="today" x1={x(now)} x2={x(now)} y1={M.top} y2={y(0)} />
+            <text className="today-label" x={x(now) - 4} y={M.top - 8} textAnchor="end">
+              {t('chart.today')}
+            </text>
+          </>
         )}
 
-        <path className="expiry-line" d={path(expiry, x, y)} />
-        <path className="actual-line" d={path(actual, x, y)} />
-        {dots(expiry).map((p, i) => (
-          <circle key={`e${i}`} className="expiry-dot" cx={x(p.x)} cy={y(p.value)} r={3.5} />
-        ))}
-        {dots(actual).map((p, i) => (
-          <circle key={`a${i}`} className="actual-dot" cx={x(p.x)} cy={y(p.value)} r={4} />
-        ))}
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={x(start) - 6} y={0} width={x(last) - x(start) + 12} height={y(0) + 6} />
+          </clipPath>
+        </defs>
+        <g clipPath={`url(#${clipId})`}>
+          {goal !== null && (
+            <line
+              className="target-line"
+              x1={M.left}
+              x2={M.left + plotW}
+              y1={y(goal)}
+              y2={y(goal)}
+            />
+          )}
+          <path className="expiry-line" d={path(expiry, x, y)} />
+          <path className="actual-line" d={path(actual, x, y)} />
+          {dots(expiry).map((p, i) => (
+            <circle key={`e${i}`} className="expiry-dot" cx={x(p.x)} cy={y(p.value)} r={3.5} />
+          ))}
+          {dots(actual).map((p, i) => (
+            <circle key={`a${i}`} className="actual-dot" cx={x(p.x)} cy={y(p.value)} r={4} />
+          ))}
+        </g>
 
-        <text
-          className="value-label"
-          x={valueLabel.x}
-          y={valueLabel.y}
-          textAnchor={valueLabel.anchor}
-        >
-          {stockNow}
-        </text>
+        {visible(lastActual.x) && (
+          <text
+            className="value-label"
+            x={valueLabel.x}
+            y={valueLabel.y}
+            textAnchor={valueLabel.anchor}
+          >
+            {stockNow}
+          </text>
+        )}
         {labels.map((l, i) => (
           <text key={i} className="point-label" x={l.x} y={l.y} textAnchor={l.anchor}>
             {l.text}

@@ -7,11 +7,15 @@ const ja = {
   title: '備蓄バーンダウンチャート',
   menu: 'メニュー',
   status: {
-    'no-nip07': 'nostr 未認証です。ブラウザ拡張機能で nostr に接続してください',
+    'no-nip07': 'nostr 未認証です。<guide>ブラウザ拡張機能</guide>で nostr に接続してください',
     loading: 'nostr 読み込み中',
     'no-events': 'nostr イベントがひとつもありません',
     'no-stock': '備蓄リストがみつかりません',
     received: '受信済み',
+    receivedAs: 'ユーザー名:{{name}} で {{n}} イベント受信済み',
+    undecryptable: '復号できないイベントがあります',
+    undecryptableN:
+      '復号できないイベントが {{n}} 件あります: {{error}}（NIP-44 を使える端末で一度開くと、どの端末でも読める NIP-04 に書き直されます）',
     saving: 'nostr 保存中',
     saved: 'nostr 保存済み',
     'save-error': 'nostr 保存に失敗しました。もう一度変更すると再送します',
@@ -63,8 +67,16 @@ const ja = {
   emptyHistory: '消費履歴はまだありません。',
   emptyCharts: 'グラフに表示する備蓄がありません。下のフォームから追加してください。',
   readOnly: 'nostr の読み込みが終わるまで編集できません',
+  crash: {
+    title: 'エラーが発生しました',
+    reload: '再読み込み',
+  },
+  readOnlyUnreadable:
+    '復号できないイベントがあるので、その内容を上書きしないように編集と保存を止めています',
   invalidDate: '日付は YY/MM/DD の形で入力してください',
-  chartStart: 'チャート開始日',
+  chartRange: 'チャート範囲',
+  chartRangeStart: 'チャート範囲の始まり',
+  chartRangeEnd: 'チャート範囲の終わり（空欄なら賞味期限の最後まで）',
   chart: {
     overall: '全体',
     actual: '消費実績',
@@ -87,11 +99,15 @@ const en: Resource = {
   title: 'Stockpile Burn-down Chart',
   menu: 'Menu',
   status: {
-    'no-nip07': 'Not signed in to nostr. Connect with a nostr browser extension.',
+    'no-nip07': 'Not signed in to nostr. Connect with a nostr <guide>browser extension</guide>.',
     loading: 'Loading from nostr',
     'no-events': 'No nostr events found',
     'no-stock': 'No stock list found',
     received: 'Received',
+    receivedAs: 'Received {{n}} events as {{name}}',
+    undecryptable: 'Some events cannot be decrypted',
+    undecryptableN:
+      '{{n}} events cannot be decrypted: {{error}} (opening the site once on a device with NIP-44 rewrites them in NIP-04, which every device can read)',
     saving: 'Saving to nostr',
     saved: 'Saved to nostr',
     'save-error': 'Failed to save to nostr. The next change will retry.',
@@ -148,8 +164,16 @@ const en: Resource = {
   emptyHistory: 'No consumption yet.',
   emptyCharts: 'Nothing to chart yet. Add stock with the form below.',
   readOnly: 'Editing is disabled until nostr finishes loading',
+  crash: {
+    title: 'Something went wrong',
+    reload: 'Reload',
+  },
+  readOnlyUnreadable:
+    'Editing and saving are stopped so that events which cannot be decrypted are not overwritten',
   invalidDate: 'Enter the date as YY/MM/DD',
-  chartStart: 'Chart start',
+  chartRange: 'Chart range',
+  chartRangeStart: 'Start of the chart range',
+  chartRangeEnd: 'End of the chart range (empty for the last best-before date)',
   chart: {
     overall: 'Overall',
     actual: 'Consumed',

@@ -73,7 +73,7 @@ describe('App', () => {
     expect(container.querySelector('.nostr-status')).toBeNull();
     expect(stored().settings).toMatchObject({ theme: 'dark', lang: 'ja', storage: 'browser' });
     expect(stored().settings.chartStart).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(container.querySelector('.chart-start input[type=date]')).not.toBeNull();
+    expect(container.querySelector('.chart-range input[type=date]')).not.toBeNull();
   });
 
   it('adds, consumes, edits and deletes stock', async () => {
@@ -154,7 +154,7 @@ describe('App', () => {
         ?.querySelector('button');
     expect(groupButton('A')?.disabled).toBe(true);
 
-    await act(async () => type(container.querySelector('.chart-start input'), '2099-01-01'));
+    await act(async () => type(container.querySelector('.chart-range input'), '2099-01-01'));
     expect(groupButton('A')?.disabled).toBe(false);
     const confirm = vi.fn(() => true);
     vi.stubGlobal('confirm', confirm);
@@ -239,8 +239,50 @@ describe('App', () => {
     expect(overall).toContain('あと 5');
   });
 
+  it('adds stock on a plain http page without crypto.randomUUID', async () => {
+    vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    const form = container.querySelectorAll('form.inline-form')[0];
+    await act(async () => type(form.querySelectorAll('input')[3], '27/01/01'));
+    await click(form.querySelector('button[type=submit]'));
+    expect(stored().stocks).toHaveLength(1);
+    expect(container.querySelector('.stock-table')).not.toBeNull();
+  });
+
+  it('stores the chart range end and flags an end before the start', async () => {
+    const [startInput, endInput] = container.querySelectorAll('.chart-range input');
+    expect((endInput as HTMLInputElement).value).toBe('');
+    expect(stored().settings.chartEnd).toBe('');
+    await act(async () => {
+      type(startInput, '2026-11-01');
+      type(endInput, '2027-03-01');
+    });
+    expect(stored().settings).toMatchObject({ chartStart: '2026-11-01', chartEnd: '2027-03-01' });
+    expect(endInput.getAttribute('aria-invalid')).toBe('false');
+    await act(async () => type(endInput, '2026-10-01'));
+    expect(endInput.getAttribute('aria-invalid')).toBe('true');
+    await act(async () => type(endInput, ''));
+    expect(stored().settings.chartEnd).toBe('');
+  });
+
+  it('links the browser extension guide when no NIP-07 extension is found', async () => {
+    await act(async () => root.unmount());
+    localStorage.setItem('stock-burn-down', JSON.stringify({ settings: { storage: 'nostr' } }));
+    root = createRoot(container);
+    await act(async () => root.render(<App />));
+    await vi.waitFor(() => expect(container.querySelector('.status-no-nip07')).not.toBeNull(), {
+      timeout: 5000,
+    });
+    const status = container.querySelector('.status-no-nip07')!;
+    expect(status.textContent).toBe(
+      'nostr 未認証です。ブラウザ拡張機能で nostr に接続してください',
+    );
+    const link = status.querySelector('a')!;
+    expect(link.textContent).toBe('ブラウザ拡張機能');
+    expect(link.getAttribute('href')).toBe('https://welcome.nostr-jp.org/tutorial/nip-07.html');
+  });
+
   it('stores the chart start date', async () => {
-    const input = container.querySelector('.chart-start input');
+    const input = container.querySelector('.chart-range input');
     await act(async () => type(input, '2026-10-01'));
     expect(stored().settings.chartStart).toBe('2026-10-01');
   });

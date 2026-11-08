@@ -15,6 +15,7 @@ function ChartCard(props: {
   title: string;
   lists: Lists;
   start: number;
+  end: number | null;
   now: number;
 }) {
   const { category, lists, start } = props;
@@ -61,6 +62,7 @@ function ChartCard(props: {
         lists={lists}
         goal={goal}
         start={start}
+        end={props.end}
         now={props.now}
       />
     </section>
@@ -70,29 +72,40 @@ function ChartCard(props: {
 export function Charts(props: {
   lists: Lists;
   chartStart: string;
-  onChartStartChange: (iso: string) => void;
+  chartEnd: string;
+  onRangeChange: (range: { chartStart?: string; chartEnd?: string }) => void;
 }) {
-  const { lists, chartStart } = props;
+  const { lists, chartStart, chartEnd } = props;
   const { t } = useTranslation();
   const categories = categoriesByUpdate(lists);
   const start = toDay(chartStart);
+  const endInvalid = chartEnd !== '' && chartEnd < chartStart;
+  const end = chartEnd === '' || endInvalid ? null : toDay(chartEnd);
   // Recomputed whenever the data changes, so the actual line reaches the latest record.
   const now = useMemo(() => dayOfTime(nowMs()), [lists]);
 
   return (
     <>
-      <div className="chart-start">
-        <label>
-          {t('chartStart')}:
-          <input
-            type="date"
-            value={chartStart}
-            required
-            onChange={(e) => {
-              if (e.target.value) props.onChartStartChange(e.target.value);
-            }}
-          />
-        </label>
+      <div className="chart-range">
+        <span>{t('chartRange')}:</span>
+        <input
+          type="date"
+          value={chartStart}
+          required
+          aria-label={t('chartRangeStart')}
+          onChange={(e) => {
+            if (e.target.value) props.onRangeChange({ chartStart: e.target.value });
+          }}
+        />
+        <span aria-hidden="true">--</span>
+        <input
+          type="date"
+          value={chartEnd}
+          min={chartStart}
+          aria-label={t('chartRangeEnd')}
+          aria-invalid={endInvalid}
+          onChange={(e) => props.onRangeChange({ chartEnd: e.target.value })}
+        />
       </div>
       {categories.length === 0 ? (
         <p className="empty">{t('emptyCharts')}</p>
@@ -105,6 +118,7 @@ export function Charts(props: {
               title={category || t('noCategory')}
               lists={lists}
               start={start}
+              end={end}
               now={now}
             />
           ))}
@@ -114,6 +128,7 @@ export function Charts(props: {
             title={t('chart.overall')}
             lists={lists}
             start={start}
+            end={end}
             now={now}
           />
         </div>

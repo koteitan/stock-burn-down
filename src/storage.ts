@@ -68,6 +68,7 @@ export function loadPersisted(): Persisted {
     lang: pick(s.lang, ['ja', 'en'], DEFAULT_SETTINGS.lang),
     storage: pick(s.storage, ['browser', 'nostr'], DEFAULT_SETTINGS.storage),
     chartStart: isIsoDate(s.chartStart) ? s.chartStart : todayNow(),
+    chartEnd: isIsoDate(s.chartEnd) ? s.chartEnd : '',
     stockSort: sanitizeSort(s.stockSort),
   };
   return {

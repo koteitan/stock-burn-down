@@ -108,6 +108,21 @@ export function expiryPoints(units: ExpiryUnit[], start: number): ChartPoint[] {
   return points;
 }
 
+/**
+ * Last day shown in a chart: the last best-before date, or `end` when that is earlier.
+ * An `end` before the start is ignored. Without any best-before date it is today.
+ */
+export function chartEnd(
+  start: number,
+  end: number | null,
+  units: ExpiryUnit[],
+  today: number,
+): number {
+  const lastExpiry = units.length > 0 ? units[units.length - 1].day : Math.max(start, today);
+  const to = end !== null && end >= start ? Math.min(end, lastExpiry) : lastExpiry;
+  return Math.max(to, start);
+}
+
 export function countTicks(max: number, maxTicks = 5): number[] {
   const top = Math.max(1, max);
   const steps = [1, 2, 5];
