@@ -2,7 +2,9 @@ import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { StockInput } from '../useStore';
 import { parseCount } from '../lists';
+import { parseShortDate } from '../date';
 import { CATEGORY_LIST_ID } from './CategoryList';
+import { ExpiryInput } from './ExpiryInput';
 
 export function AddStockForm(props: { disabled: boolean; onAdd: (input: StockInput) => void }) {
   const { t } = useTranslation();
@@ -13,12 +15,13 @@ export function AddStockForm(props: { disabled: boolean; onAdd: (input: StockInp
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!expiry) return;
+    const iso = parseShortDate(expiry);
+    if (!iso) return;
     props.onAdd({
       category: category.trim(),
       content: content.trim(),
       count: parseCount(count),
-      expiry,
+      expiry: iso,
     });
     setContent('');
     setCount('');
@@ -55,7 +58,7 @@ export function AddStockForm(props: { disabled: boolean; onAdd: (input: StockInp
         </label>
         <label>
           {t('field.expiry')}:
-          <input type="date" required value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+          <ExpiryInput value={expiry} onChange={setExpiry} />
         </label>
         <button type="submit">{t('action.add')}</button>
       </fieldset>

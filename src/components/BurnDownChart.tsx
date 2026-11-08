@@ -8,10 +8,11 @@ import {
   expiryPoints,
   expiryUnits,
   recordsSince,
+  type CategoryFilter,
   type ChartPoint,
 } from '../chart';
 import { formatDate, fromDay } from '../date';
-import type { Lists, TargetItem } from '../types';
+import type { Lists } from '../types';
 
 const HEIGHT = 240;
 const M = { top: 22, right: 16, bottom: 26, left: 34 };
@@ -98,9 +99,12 @@ function useWidth() {
 }
 
 interface ChartProps {
-  category: string;
+  /** A category, or null for the overall chart of all categories. */
+  category: CategoryFilter;
+  /** Name shown for the chart (category name or "overall"). */
+  title: string;
   lists: Lists;
-  target: TargetItem | undefined;
+  goal: number | null;
   /** Chart start day. */
   start: number;
   /** Current time as a fractional day. */
@@ -130,10 +134,9 @@ const path = (pts: ChartPoint[], x: (v: number) => number, y: (v: number) => num
   pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.x)},${y(p.value)}`).join('');
 
 export function ChartBody(props: ChartProps & { width: number }) {
-  const { category, lists, target, start, now, width } = props;
+  const { category, title, lists, goal, start, now, width } = props;
   const { t } = useTranslation();
   const [active, setActive] = useState<number | null>(null);
-  const categoryName = category || t('noCategory');
   const today = Math.floor(now);
 
   const units = useMemo(
@@ -144,20 +147,20 @@ export function ChartBody(props: ChartProps & { width: number }) {
     () => recordsSince(lists.history, category, start),
     [lists.history, category, start],
   );
-  const expiry = useMemo(() => expiryPoints(units, category, start), [units, category, start]);
+  const expiry = useMemo(() => expiryPoints(units, start), [units, start]);
   const actual = useMemo(
     () => actualPoints(lists.history, category, start, now, units.length),
     [lists.history, category, start, now, units.length],
   );
   const n = units.length;
   const stockNow = actual[actual.length - 1].value;
-  const goal = target?.count ?? null;
 
   const groups = useMemo(() => {
     const days = new Set<number>([start, today]);
     for (const u of units) days.add(u.day);
     for (const r of records) days.add(Math.floor(dayOfTime(r.at)));
-    const name = (content: string) => content.trim() || categoryName;
+    const name = (item: { category: string; content: string }) =>
+      item.content.trim() || item.category || t('noCategory');
     return [...days]
       .sort((a, b) => a - b)
       .map((day): Group => ({
@@ -170,14 +173,14 @@ export function ChartBody(props: ChartProps & { width: number }) {
               records
                 .filter((r) => Math.floor(dayOfTime(r.at)) <= day)
                 .reduce((sum, r) => sum + r.count, 0),
-        expiring: tally(units.filter((u) => u.day === day).map((u) => name(u.content))),
+        expiring: tally(units.filter((u) => u.day === day).map((u) => name(u))),
         eaten: tally(
           records
             .filter((r) => Math.floor(dayOfTime(r.at)) === day)
-            .flatMap((r) => Array<string>(r.count).fill(name(r.content))),
+            .flatMap((r) => Array<string>(r.count).fill(name(r))),
         ),
       }));
-  }, [units, records, start, today, n, categoryName]);
+  }, [units, records, start, today, n, t]);
 
   const plotW = Math.max(0, width - M.left - M.right);
   const plotH = HEIGHT - M.top - M.bottom;
@@ -315,7 +318,7 @@ export function ChartBody(props: ChartProps & { width: number }) {
         height={HEIGHT}
         role="img"
         aria-label={t('chart.aria', {
-          category: categoryName,
+          category: title,
           n: stockNow,
         })}
         tabIndex={0}

@@ -7,9 +7,9 @@ import { HistoryTable } from './components/HistoryTable';
 import { Menu } from './components/Menu';
 import { StockTable } from './components/StockTable';
 import { TargetSection } from './components/TargetSection';
-import { dayOfTime } from './chart';
-import { formatDate, toDay, todayIso } from './date';
-import { categoriesOf } from './lists';
+import { toDay } from './date';
+import { forcedLang, todayNow } from './debug';
+import { categoriesByUpdate, categoriesOf } from './lists';
 import type { Theme } from './types';
 import { useStore } from './useStore';
 
@@ -30,22 +30,21 @@ function useTheme(theme: Theme) {
 export function App() {
   const { t, i18n } = useTranslation();
   const { settings, updateSettings, lists, nostrStatus, editable, actions } = useStore();
-  const today = useMemo(() => toDay(todayIso()), []);
+  const today = useMemo(() => toDay(todayNow()), []);
   const categories = categoriesOf(lists);
 
   useTheme(settings.theme);
   useEffect(() => {
     // changeLanguage() emits languageChanged even for the current language, which re-renders.
-    if (i18n.language !== settings.lang) void i18n.changeLanguage(settings.lang);
-    document.documentElement.lang = settings.lang;
+    const lang = forcedLang ?? settings.lang;
+    if (i18n.language !== lang) void i18n.changeLanguage(lang);
+    document.documentElement.lang = lang;
   }, [i18n, settings.lang]);
   useEffect(() => {
     document.title = t('title');
   }, [t]);
 
   const status = settings.storage === 'nostr' && nostrStatus ? nostrStatus : null;
-  const start = toDay(settings.chartStart);
-  const oldRecords = lists.history.filter((h) => dayOfTime(h.at) < start).length;
 
   return (
     <>
@@ -74,6 +73,8 @@ export function App() {
           stocks={lists.stocks}
           today={today}
           disabled={!editable}
+          sort={settings.stockSort}
+          onSortChange={(stockSort) => updateSettings({ stockSort })}
           onConsume={actions.consumeOne}
           onUpdate={actions.updateStock}
           onDelete={actions.deleteStock}
@@ -88,23 +89,13 @@ export function App() {
           onDelete={actions.deleteTarget}
         />
         <h2>{t('section.history')}</h2>
-        <p>
-          <button
-            className="danger"
-            disabled={!editable || oldRecords === 0}
-            onClick={() => {
-              const message = t('deleteBeforeStartConfirm', {
-                date: formatDate(settings.chartStart),
-                n: oldRecords,
-              });
-              if (window.confirm(message)) actions.deleteRecordsBefore(start);
-            }}
-          >
-            {t('action.deleteBeforeStart')}
-          </button>
-        </p>
         <HistoryTable
           history={lists.history}
+          categoryOrder={categoriesByUpdate(lists)}
+          chartStart={settings.chartStart}
+          onDeleteBefore={(category) =>
+            actions.deleteRecordsBefore(toDay(settings.chartStart), category)
+          }
           disabled={!editable}
           onUpdate={actions.updateRecord}
           onDelete={actions.deleteRecord}

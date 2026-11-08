@@ -1,4 +1,5 @@
-import { isIsoDate, todayIso } from './date';
+import { isIsoDate } from './date';
+import { todayNow } from './debug';
 import type { ConsumeRecord, Lists, StockItem, TargetItem, UpdatedAt } from './types';
 
 type Raw = Record<string, unknown>;
@@ -19,7 +20,7 @@ export function sanitizeStock(v: unknown, category?: string): StockItem | null {
   if (count === 0 || !isIsoDate(v.expiry)) return null;
   return {
     id: str(v.id) || newId(),
-    addedDate: isIsoDate(v.addedDate) ? v.addedDate : todayIso(),
+    addedDate: isIsoDate(v.addedDate) ? v.addedDate : todayNow(),
     category: cat,
     content: str(v.content),
     count,
@@ -34,7 +35,7 @@ export function sanitizeTarget(v: unknown, category?: string): TargetItem | null
   if (count === 0) return null;
   return {
     id: str(v.id) || newId(),
-    addedDate: isIsoDate(v.addedDate) ? v.addedDate : todayIso(),
+    addedDate: isIsoDate(v.addedDate) ? v.addedDate : todayNow(),
     category: cat,
     count,
   };

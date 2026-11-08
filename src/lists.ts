@@ -1,12 +1,30 @@
-import type { ConsumeRecord, Lists, StockItem, TargetItem } from './types';
+import type { ConsumeRecord, Lists, StockItem, StockSort, StockSortKey, TargetItem } from './types';
 
-export function compareStock(a: StockItem, b: StockItem): number {
-  return (
-    a.expiry.localeCompare(b.expiry) ||
-    a.addedDate.localeCompare(b.addedDate) ||
-    a.content.localeCompare(b.content) ||
-    a.id.localeCompare(b.id)
-  );
+/**
+ * Sorts by `sort.order`, each key ascending or descending. 'added' is the added date and then
+ * the array order, which is the order the items were added in.
+ */
+export function sortStocks(stocks: StockItem[], sort: StockSort): StockItem[] {
+  const index = new Map(stocks.map((s, i) => [s.id, i]));
+  const pos = (s: StockItem) => index.get(s.id) ?? 0;
+  const compare: Record<StockSortKey, (a: StockItem, b: StockItem) => number> = {
+    expiry: (a, b) => a.expiry.localeCompare(b.expiry),
+    category: (a, b) => a.category.localeCompare(b.category),
+    added: (a, b) => a.addedDate.localeCompare(b.addedDate) || pos(a) - pos(b),
+  };
+  return [...stocks].sort((a, b) => {
+    for (const key of sort.order) {
+      const c = compare[key](a, b);
+      if (c !== 0) return sort.desc[key] ? -c : c;
+    }
+    return pos(a) - pos(b);
+  });
+}
+
+/** A header click: the key becomes the top priority, or flips direction if it already is. */
+export function clickSort(sort: StockSort, key: StockSortKey): StockSort {
+  if (sort.order[0] === key) return { ...sort, desc: { ...sort.desc, [key]: !sort.desc[key] } };
+  return { ...sort, order: [key, ...sort.order.filter((k) => k !== key)] };
 }
 
 export function compareRecord(a: ConsumeRecord, b: ConsumeRecord): number {
@@ -45,9 +63,9 @@ export function listsOfCategory(lists: Lists, category: string): Lists {
 /** The items of one category in a canonical order, without the category field. */
 export function categoryPayload(lists: Lists, category: string) {
   return {
+    // Stocks keep their array order, which is the order they were added in.
     stocks: lists.stocks
       .filter((s) => s.category === category)
-      .sort(compareStock)
       .map(({ id, addedDate, content, count, expiry }) => ({
         id,
         addedDate,

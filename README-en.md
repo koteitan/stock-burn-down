@@ -9,6 +9,7 @@ Site: https://koteitan.github.io/stock-burn-down/
 ### Enter stock and targets
 1. In "Add", enter Category, Content, Qty and Best before, then press [Add].
    - An empty Qty counts as 1.
+   - Enter the best-before date as YY/MM/DD (2-digit year), e.g. 23/12/31 = 31 Dec 2023. YYYY/MM/DD and YYMMDD also work.
    - Category may be empty (the chart shows it as "(no category)").
 2. In the form below "Target list", enter Category and Target, then press [Add]. There is one target per category; adding an existing category overwrites its target.
 3. When you use one item, press [Consume 1] in the stock list.
@@ -18,7 +19,14 @@ Site: https://koteitan.github.io/stock-burn-down/
    - [Done]: overwrite the row with the input.
    - [Cancel]: close without changing anything.
    - [Delete]: delete the row. Deleting a history row does not put the quantity back in the stock list.
-5. [Delete history before the chart start] deletes, after a confirmation, all consumption records made before the chart start date.
+5. The consumption history is grouped by category. [Delete history before the chart start] in a group's header row deletes, after a confirmation, that category's records made before the chart start date.
+
+### Stock list order
+- By default the list is sorted by best before → category → added order.
+- Clicking the "Best before", "Category" or "Added" header makes that column the top priority. Clicking the top-priority header again flips ascending and descending.
+- The number next to ▲ (ascending) / ▼ (descending) in each header is its priority.
+- The order is saved in the browser's localStorage and restored on the next visit.
+- Best-before dates are shown as YY/MM/DD (in the consumption history as well).
 
 ### Reading the charts
 One chart per category is drawn from the "Chart start" date (start) above the charts. The most recently updated category comes first. The vertical axis is the stock count, and every line falls monotonically from (start, N), where N is the stock at start (current stock + quantity consumed since start).
@@ -32,6 +40,7 @@ One chart per category is drawn from the "Chart start" date (start) above the ch
   - e_k is the k-th best-before date in ascending order. Dates before start are placed at start.
   - Consuming does not move this line. On dates where the blue line is above it, the difference has passed its best-before date.
 - Orange dashed line (Target): the target quantity.
+- Last comes an "Overall" chart that combines every category. Its stock, consumption and target are the totals over all categories.
 - The small text beside a green point is the item's content. It is omitted when the content is empty or equal to the category. The last blue point shows the current stock N-C.
 - Hovering over a chart shows the consumed, best-before and target values and the items for that date (tapping or the ← → keys also work).
 - The stock list marks items past their best-before date as "expired" and items within 30 days as "soon".
@@ -69,6 +78,11 @@ npm run dev        # development server
 ```
 `dist/` is built with relative paths (`base: './'`), so it works under any path.
 
+### URL parameters for testing
+- `?today=261201`: runs as if today were 2026-12-01 (YYMMDD, YY/MM/DD or YYYY-MM-DD). The clock is shifted by whole days, so added dates, consumption times, the chart's "today" and the expired check all follow it. Only the created_at of nostr events stays real.
+- `?lang=en` / `?lang=ja`: fixes the UI language. The saved language setting is not changed, and the language choice in the menu is disabled while fixed.
+- Example: `?today=261201&lang=en`. While a parameter is in effect, the menu shows `debug: today=26/12/01 lang=en` at the bottom.
+
 ### Deployment
 Pushing to the main branch makes GitHub Actions (`.github/workflows/deploy.yml`) build the site and publish it to GitHub Pages. CI only builds and uploads; it runs no lint or tests. In the repository settings, Settings → Pages → Source must be "GitHub Actions".
 
@@ -88,7 +102,16 @@ The key `stock-burn-down` holds this JSON:
 ```json
 {
   "version": 1,
-  "settings": { "theme": "dark", "lang": "ja", "storage": "browser", "chartStart": "2026-11-01" },
+  "settings": {
+    "theme": "dark",
+    "lang": "ja",
+    "storage": "browser",
+    "chartStart": "2026-11-01",
+    "stockSort": {
+      "order": ["expiry", "category", "added"],
+      "desc": { "expiry": false, "category": false, "added": false }
+    }
+  },
   "stocks": [
     {
       "id": "8f0c…",
@@ -114,6 +137,7 @@ The key `stock-burn-down` holds this JSON:
 }
 ```
 
+- `settings.stockSort` is the stock list order (`order` lists the keys by priority; `desc` tells whether each is descending).
 - `settings.chartStart` is the chart start date. It is kept in localStorage even when the storage is nostr (it is not saved to nostr).
 - `history` is the consumption history. `at` is the consumption time (Unix milliseconds).
 - `updatedAt` is the last update time per category (Unix milliseconds) and decides the chart order.

@@ -492,9 +492,72 @@ th.num {
   font-variant-numeric: tabular-nums;
 }
 
+/* 1.5x the former edit-field widths (size 8 and 12) */
+.stock-table .col-category {
+  min-width: calc(12ch + 14px);
+}
+
+.stock-table .col-content {
+  min-width: calc(18ch + 14px);
+}
+
+.stock-table .col-category input,
+.stock-table .col-content input {
+  width: 100%;
+}
+
+.sort-header {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.sort-header:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.sort-header.sort-top {
+  color: var(--text);
+}
+
+.sort-mark {
+  font-size: 0.75em;
+  opacity: 0.45;
+}
+
+.sort-top .sort-mark {
+  opacity: 1;
+}
+
+.sort-mark sub {
+  font-size: 0.8em;
+}
+
+input[aria-invalid='true'] {
+  border-color: var(--critical);
+}
+
 td.actions {
   display: flex;
   gap: 6px;
+}
+
+tr.group-row th,
+tr.group-row td {
+  background: var(--raised);
+  color: var(--text);
+}
+
+.group-note {
+  margin-left: 6px;
+  font-weight: normal;
+  color: var(--text-2);
 }
 
 tr.editing td {

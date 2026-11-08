@@ -63,7 +63,7 @@ describe('expiryPoints', () => {
       record('h0', '2026-10-15T06:00', { content: '焼き鳥', expiry: '2026-11-20' }),
     ];
     const units = expiryUnits(stocks, history, '缶詰', start);
-    const pts = expiryPoints(units, '缶詰', start);
+    const pts = expiryPoints(units, start);
     expect(pts.map((p) => [fromDay(p.x), p.value, p.label])).toEqual([
       // N = current stock (3) + consumed since the start (1)
       ['2026-11-01', 4, null],
@@ -82,7 +82,40 @@ describe('expiryPoints', () => {
       '',
       start,
     );
-    expect(expiryPoints(units, '', start).map((p) => p.label)).toEqual([null, '水']);
+    expect(expiryPoints(units, start).map((p) => p.label)).toEqual([null, '水']);
+  });
+});
+
+describe('all categories (overall chart)', () => {
+  it('combines every category and labels by the category of each unit', () => {
+    const stocks = [
+      stock({ id: 'a', expiry: '2027-01-01', category: '缶詰', content: 'サバ', count: 2 }),
+      stock({ id: 'b', expiry: '2027-02-01', category: '水', content: '水' }),
+    ];
+    const history = [
+      record('h1', '2026-11-03T06:00', { category: '水', content: '2L', expiry: '2026-12-01' }),
+      record('h2', '2026-11-04T06:00', { category: '缶詰', content: 'サバ' }),
+    ];
+    const units = expiryUnits(stocks, history, null, start);
+    expect(units.map((u) => [u.category, u.content])).toEqual([
+      ['水', '2L'],
+      ['缶詰', 'サバ'],
+      ['缶詰', 'サバ'],
+      ['缶詰', 'サバ'],
+      ['水', '水'],
+    ]);
+    expect(expiryPoints(units, start).map((p) => [p.value, p.label])).toEqual([
+      [5, null],
+      [4, '2L'],
+      [3, 'サバ'],
+      [2, null],
+      [1, null],
+      [0, null],
+    ]);
+    const now = dayOfTime(new Date('2026-11-08T00:00').getTime());
+    expect(actualPoints(history, null, start, now, units.length).map((p) => p.value)).toEqual([
+      5, 4, 3, 3,
+    ]);
   });
 });
 

@@ -1,7 +1,15 @@
-import { isIsoDate, todayIso } from './date';
+import { isIsoDate } from './date';
+import { todayNow } from './debug';
 import { categoriesOf } from './lists';
 import { sanitizeLists } from './sanitize';
-import { DEFAULT_SETTINGS, type Lists, type Settings } from './types';
+import {
+  DEFAULT_SETTINGS,
+  DEFAULT_STOCK_SORT,
+  type Lists,
+  type Settings,
+  type StockSort,
+  type StockSortKey,
+} from './types';
 
 export const STORAGE_KEY = 'stock-burn-down';
 
@@ -17,6 +25,24 @@ function pick<T extends string>(v: unknown, allowed: readonly T[], fallback: T):
   return allowed.includes(v as T) ? (v as T) : fallback;
 }
 
+const SORT_KEYS: StockSortKey[] = ['expiry', 'category', 'added'];
+
+function sanitizeSort(v: unknown): StockSort {
+  if (typeof v !== 'object' || v === null) return DEFAULT_STOCK_SORT;
+  const r = v as { order?: unknown; desc?: Record<string, unknown> };
+  const order = Array.isArray(r.order) ? r.order : [];
+  const valid = order.length === SORT_KEYS.length && SORT_KEYS.every((k) => order.includes(k));
+  const desc = typeof r.desc === 'object' && r.desc !== null ? r.desc : {};
+  return {
+    order: valid ? (order as StockSortKey[]) : DEFAULT_STOCK_SORT.order,
+    desc: {
+      expiry: desc.expiry === true,
+      category: desc.category === true,
+      added: desc.added === true,
+    },
+  };
+}
+
 export function loadPersisted(): Persisted {
   let raw: unknown = null;
   try {
@@ -27,7 +53,7 @@ export function loadPersisted(): Persisted {
   }
   if (typeof raw !== 'object' || raw === null) {
     return {
-      settings: { ...DEFAULT_SETTINGS, chartStart: todayIso() },
+      settings: { ...DEFAULT_SETTINGS, chartStart: todayNow() },
       lists: null,
       pendingUpload: null,
     };
@@ -41,7 +67,8 @@ export function loadPersisted(): Persisted {
     theme: pick(s.theme, ['dark', 'light', 'system'], DEFAULT_SETTINGS.theme),
     lang: pick(s.lang, ['ja', 'en'], DEFAULT_SETTINGS.lang),
     storage: pick(s.storage, ['browser', 'nostr'], DEFAULT_SETTINGS.storage),
-    chartStart: isIsoDate(s.chartStart) ? s.chartStart : todayIso(),
+    chartStart: isIsoDate(s.chartStart) ? s.chartStart : todayNow(),
+    stockSort: sanitizeSort(s.stockSort),
   };
   return {
     settings,

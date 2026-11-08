@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { formatShortDate } from '../date';
+import { forcedLang, forcedToday } from '../debug';
 import type { Lang, Settings, StorageMode, Theme } from '../types';
 
 const REPO_URL = 'https://github.com/koteitan/stock-burn-down';
@@ -10,9 +12,10 @@ function Radios<T extends string>(props: {
   value: T;
   options: { value: T; label: string }[];
   onChange: (v: T) => void;
+  disabled?: boolean;
 }) {
   return (
-    <fieldset className="radios">
+    <fieldset className="radios" disabled={props.disabled}>
       <legend>{props.legend}:</legend>
       {props.options.map((o) => (
         <label key={o.value}>
@@ -80,12 +83,13 @@ export function Menu(props: { settings: Settings; onChange: (patch: Partial<Sett
           <Radios<Lang>
             name="lang"
             legend={t('settings.lang')}
-            value={settings.lang}
+            value={forcedLang ?? settings.lang}
             options={[
               { value: 'ja', label: t('settings.ja') },
               { value: 'en', label: t('settings.en') },
             ]}
             onChange={(lang) => onChange({ lang })}
+            disabled={forcedLang !== null}
           />
           <Radios<StorageMode>
             name="storage"
@@ -110,6 +114,13 @@ export function Menu(props: { settings: Settings; onChange: (patch: Partial<Sett
             </li>
           </ul>
           <div className="version">v{__APP_VERSION__}</div>
+          {(forcedToday || forcedLang) && (
+            <div className="version">
+              debug:
+              {forcedToday && ` today=${formatShortDate(forcedToday)}`}
+              {forcedLang && ` lang=${forcedLang}`}
+            </div>
+          )}
         </div>
       )}
     </div>

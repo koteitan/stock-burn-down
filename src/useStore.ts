@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { dayOfTime } from './chart';
-import { todayIso } from './date';
+import { nowMs, todayNow } from './debug';
 import { isEmptyLists, mergeLists, touchChanged, upsertTarget } from './lists';
 import { NostrSync } from './nostr/sync';
 import { newId } from './sanitize';
@@ -90,7 +90,7 @@ export function useStore() {
 
   const edit = useCallback(
     (fn: (cur: Lists) => Lists) => {
-      if (editable) setLists((cur) => touchChanged(cur, fn(cur), Date.now()));
+      if (editable) setLists((cur) => touchChanged(cur, fn(cur), nowMs()));
     },
     [editable],
   );
@@ -99,10 +99,10 @@ export function useStore() {
     addStock: (input: StockInput) =>
       edit((cur) => ({
         ...cur,
-        stocks: [...cur.stocks, { ...input, id: newId(), addedDate: todayIso() }],
+        stocks: [...cur.stocks, { ...input, id: newId(), addedDate: todayNow() }],
       })),
     consumeOne: (id: string) => {
-      const record = { id: newId(), at: Date.now(), count: 1 };
+      const record = { id: newId(), at: nowMs(), count: 1 };
       edit((cur) => {
         const item = cur.stocks.find((s) => s.id === id);
         if (!item) return cur;
@@ -126,7 +126,7 @@ export function useStore() {
     addTarget: (input: TargetInput) =>
       edit((cur) => ({
         ...cur,
-        targets: upsertTarget(cur.targets, { ...input, id: newId(), addedDate: todayIso() }),
+        targets: upsertTarget(cur.targets, { ...input, id: newId(), addedDate: todayNow() }),
       })),
     updateTarget: (id: string, input: TargetInput) =>
       edit((cur) => ({
@@ -144,9 +144,12 @@ export function useStore() {
       })),
     deleteRecord: (id: string) =>
       edit((cur) => ({ ...cur, history: cur.history.filter((h) => h.id !== id) })),
-    /** Deletes the consumption records made before the start day (fractional day < start). */
-    deleteRecordsBefore: (start: number) =>
-      edit((cur) => ({ ...cur, history: cur.history.filter((h) => dayOfTime(h.at) >= start) })),
+    /** Deletes the records of `category` made before the start day. */
+    deleteRecordsBefore: (start: number, category: string) =>
+      edit((cur) => ({
+        ...cur,
+        history: cur.history.filter((h) => h.category !== category || dayOfTime(h.at) >= start),
+      })),
   };
 
   return { settings, updateSettings, lists, nostrStatus, editable, actions };

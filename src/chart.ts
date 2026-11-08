@@ -22,9 +22,15 @@ const contentLabel = (content: string, category: string) => {
 };
 
 /** Records of `category` consumed on or after the start day, oldest first. */
-export function recordsSince(history: ConsumeRecord[], category: string, start: number) {
+/** A category, or null for all categories together. */
+export type CategoryFilter = string | null;
+
+const inCategory = (item: { category: string }, category: CategoryFilter) =>
+  category === null || item.category === category;
+
+export function recordsSince(history: ConsumeRecord[], category: CategoryFilter, start: number) {
   return history
-    .filter((h) => h.category === category && dayOfTime(h.at) >= start)
+    .filter((h) => inCategory(h, category) && dayOfTime(h.at) >= start)
     .sort(compareRecord);
 }
 
@@ -34,7 +40,7 @@ export function recordsSince(history: ConsumeRecord[], category: string, start: 
  */
 export function actualPoints(
   history: ConsumeRecord[],
-  category: string,
+  category: CategoryFilter,
   start: number,
   now: number,
   n: number,
@@ -52,6 +58,7 @@ export function actualPoints(
 
 export interface ExpiryUnit {
   day: number;
+  category: string;
   content: string;
 }
 
@@ -62,34 +69,40 @@ export interface ExpiryUnit {
 export function expiryUnits(
   stocks: StockItem[],
   history: ConsumeRecord[],
-  category: string,
+  category: CategoryFilter,
   start: number,
 ): ExpiryUnit[] {
   const units: ExpiryUnit[] = [];
-  const add = (expiry: string, content: string, count: number) => {
-    const day = Math.max(start, toDay(expiry));
-    for (let j = 0; j < count; j++) units.push({ day, content });
+  const add = (item: { expiry: string; category: string; content: string; count: number }) => {
+    const day = Math.max(start, toDay(item.expiry));
+    for (let j = 0; j < item.count; j++) {
+      units.push({ day, category: item.category, content: item.content });
+    }
   };
-  for (const s of stocks) if (s.category === category) add(s.expiry, s.content, s.count);
-  for (const h of recordsSince(history, category, start)) add(h.expiry, h.content, h.count);
-  return units.sort((a, b) => a.day - b.day || a.content.localeCompare(b.content));
+  for (const s of stocks) if (inCategory(s, category)) add(s);
+  for (const h of recordsSince(history, category, start)) add(h);
+  return units.sort(
+    (a, b) =>
+      a.day - b.day || a.category.localeCompare(b.category) || a.content.localeCompare(b.content),
+  );
 }
 
 /**
  * Stock if every unit is consumed on its best-before date:
  * (start,N) -- (e(sort(1)),N-1) -- ... -- (e(sort(N)),0); expiries before the start sit at the start.
- * A run of units with the same expiry and content is labelled once.
+ * A run of units with the same expiry, category and content is labelled once.
  */
-export function expiryPoints(units: ExpiryUnit[], category: string, start: number): ChartPoint[] {
+export function expiryPoints(units: ExpiryUnit[], start: number): ChartPoint[] {
   const n = units.length;
   const points: ChartPoint[] = [{ x: start, value: n, label: null }];
   units.forEach((u, k) => {
     const prev = units[k - 1];
-    const repeat = prev && prev.day === u.day && prev.content === u.content;
+    const repeat =
+      prev && prev.day === u.day && prev.category === u.category && prev.content === u.content;
     points.push({
       x: u.day,
       value: n - (k + 1),
-      label: repeat ? null : contentLabel(u.content, category),
+      label: repeat ? null : contentLabel(u.content, u.category),
     });
   });
   return points;

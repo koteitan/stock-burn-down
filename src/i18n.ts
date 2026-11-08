@@ -1,5 +1,6 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
+import { forcedLang } from './debug';
 import { loadPersisted } from './storage';
 
 const ja = {
@@ -52,7 +53,8 @@ const ja = {
     deleteBeforeStart: 'チャート開始日前の消費履歴を消す',
   },
   deleteBeforeStartConfirm:
-    'チャート開始日 {{date}} より前の消費履歴 {{n}} 件を削除します。よろしいですか？',
+    '「{{category}}」のチャート開始日 {{date}} より前の消費履歴 {{n}} 件を削除します。よろしいですか？',
+  oldRecords: '（開始日前 {{n}} 件）',
   noCategory: '（種類なし）',
   expired: '期限切れ',
   expiringSoon: 'まもなく',
@@ -61,8 +63,10 @@ const ja = {
   emptyHistory: '消費履歴はまだありません。',
   emptyCharts: 'グラフに表示する備蓄がありません。下のフォームから追加してください。',
   readOnly: 'nostr の読み込みが終わるまで編集できません',
+  invalidDate: '日付は YY/MM/DD の形で入力してください',
   chartStart: 'チャート開始日',
   chart: {
+    overall: '全体',
     actual: '消費実績',
     expiry: '賞味期限',
     target: '目標',
@@ -133,7 +137,9 @@ const en: Resource = {
     delete: 'Delete',
     deleteBeforeStart: 'Delete history before the chart start',
   },
-  deleteBeforeStartConfirm: 'Delete {{n}} consumption records before the chart start {{date}}?',
+  deleteBeforeStartConfirm:
+    'Delete {{n}} consumption records of "{{category}}" before the chart start {{date}}?',
+  oldRecords: ' ({{n}} before start)',
   noCategory: '(no category)',
   expired: 'expired',
   expiringSoon: 'soon',
@@ -142,8 +148,10 @@ const en: Resource = {
   emptyHistory: 'No consumption yet.',
   emptyCharts: 'Nothing to chart yet. Add stock with the form below.',
   readOnly: 'Editing is disabled until nostr finishes loading',
+  invalidDate: 'Enter the date as YY/MM/DD',
   chartStart: 'Chart start',
   chart: {
+    overall: 'Overall',
     actual: 'Consumed',
     expiry: 'Best before',
     target: 'Target',
@@ -160,7 +168,7 @@ const en: Resource = {
 
 void i18n.use(initReactI18next).init({
   resources: { ja: { translation: ja }, en: { translation: en } },
-  lng: loadPersisted().settings.lang,
+  lng: forcedLang ?? loadPersisted().settings.lang,
   fallbackLng: 'ja',
   interpolation: { escapeValue: false },
 });

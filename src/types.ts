@@ -40,18 +40,33 @@ export type Theme = 'dark' | 'light' | 'system';
 export type Lang = 'ja' | 'en';
 export type StorageMode = 'browser' | 'nostr';
 
+export type StockSortKey = 'expiry' | 'category' | 'added';
+
+export interface StockSort {
+  /** Keys from the highest priority down; always all three. */
+  order: StockSortKey[];
+  desc: Record<StockSortKey, boolean>;
+}
+
+export const DEFAULT_STOCK_SORT: StockSort = {
+  order: ['expiry', 'category', 'added'],
+  desc: { expiry: false, category: false, added: false },
+};
+
 export interface Settings {
   theme: Theme;
   lang: Lang;
   storage: StorageMode;
   /** Chart start date (YYYY-MM-DD), shared by all charts. */
   chartStart: string;
+  stockSort: StockSort;
 }
 
 export const DEFAULT_SETTINGS: Omit<Settings, 'chartStart'> = {
   theme: 'dark',
   lang: 'ja',
   storage: 'browser',
+  stockSort: DEFAULT_STOCK_SORT,
 };
 
 export const EMPTY_LISTS: Lists = { stocks: [], targets: [], history: [], updatedAt: {} };

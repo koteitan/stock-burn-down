@@ -82,11 +82,14 @@ describe('App', () => {
     await act(async () => {
       type(inputs[0], '缶詰');
       type(inputs[1], 'シーチキン');
-      type(inputs[3], '2027-06-01');
+      type(inputs[3], '27/06/01');
     });
     await click(form.querySelector('button[type=submit]'));
 
-    expect(stored().stocks).toMatchObject([{ category: '缶詰', content: 'シーチキン', count: 1 }]);
+    expect(stored().stocks).toMatchObject([
+      { category: '缶詰', content: 'シーチキン', count: 1, expiry: '2027-06-01' },
+    ]);
+    expect(container.querySelector('.stock-table tbody tr')?.textContent).toContain('27/06/01');
     expect(stored().updatedAt['缶詰']).toBeGreaterThan(0);
     expect(container.querySelector('.chart-card h3')?.textContent).toBe('缶詰');
     expect(container.querySelector('.chart-plot svg')).not.toBeNull();
@@ -103,10 +106,14 @@ describe('App', () => {
     expect(stored().history).toMatchObject([
       { category: '缶詰', content: 'シーチキン', count: 1, expiry: '2027-06-01' },
     ]);
-    const historyRows = container.querySelectorAll('.history-table tbody tr');
+    const historyRows = container.querySelectorAll('.history-table tbody tr:not(.group-row)');
     expect(historyRows).toHaveLength(1);
     expect(historyRows[0].textContent).toContain('シーチキン');
-    expect(container.querySelectorAll('.chart-plot path')).toHaveLength(2);
+    expect(container.querySelector('.history-table .group-row')?.textContent).toContain('缶詰');
+    expect(
+      container.querySelectorAll('.chart-card:not(.chart-overall) .chart-plot path'),
+    ).toHaveLength(2);
+    expect(container.querySelector('.chart-overall h3')?.textContent).toBe('全体');
 
     await click(button('編集'));
     await click(button('削除'));
@@ -120,28 +127,116 @@ describe('App', () => {
     expect(container.querySelector('.chart-card')).toBeNull();
   });
 
-  it('deletes consumption records made before the chart start', async () => {
+  it('deletes consumption records before the chart start per category', async () => {
     const form = container.querySelectorAll('form.inline-form')[0];
     const inputs = form.querySelectorAll('input');
-    await act(async () => {
-      type(inputs[1], 'サバ');
-      type(inputs[2], '2');
-      type(inputs[3], '2027-01-01');
-    });
-    await click(form.querySelector('button[type=submit]'));
-    await click(button('１つ消費'));
-    expect(stored().history).toHaveLength(1);
-    const deleteOld = button('チャート開始日前の消費履歴を消す');
-    expect(deleteOld?.disabled).toBe(true);
+    for (const category of ['A', 'B']) {
+      await act(async () => {
+        type(inputs[0], category);
+        type(inputs[2], '2');
+        type(inputs[3], '27/01/01');
+      });
+      await click(form.querySelector('button[type=submit]'));
+    }
+    for (const b of [...container.querySelectorAll('button')].filter(
+      (x) => x.textContent === '１つ消費',
+    )) {
+      await click(b);
+    }
+    expect(
+      stored()
+        .history.map((h: { category: string }) => h.category)
+        .sort(),
+    ).toEqual(['A', 'B']);
+    const groupButton = (category: string) =>
+      [...container.querySelectorAll('.history-table .group-row')]
+        .find((tr) => tr.querySelector('th')?.textContent?.startsWith(category))
+        ?.querySelector('button');
+    expect(groupButton('A')?.disabled).toBe(true);
 
     await act(async () => type(container.querySelector('.chart-start input'), '2099-01-01'));
-    expect(deleteOld?.disabled).toBe(false);
+    expect(groupButton('A')?.disabled).toBe(false);
     const confirm = vi.fn(() => true);
     vi.stubGlobal('confirm', confirm);
-    await click(deleteOld);
+    await click(groupButton('A'));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('「A」'));
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('1 件'));
-    expect(stored().history).toEqual([]);
-    expect(stored().stocks[0].count).toBe(1);
+    expect(stored().history.map((h: { category: string }) => h.category)).toEqual(['B']);
+    expect(stored().stocks.map((x: { count: number }) => x.count)).toEqual([1, 1]);
+  });
+
+  it('sorts the stock list by header clicks and keeps the order in localStorage', async () => {
+    const form = container.querySelectorAll('form.inline-form')[0];
+    const inputs = form.querySelectorAll('input');
+    const add = async (category: string, expiry: string) => {
+      await act(async () => {
+        type(inputs[0], category);
+        type(inputs[3], expiry);
+      });
+      await click(form.querySelector('button[type=submit]'));
+    };
+    await add('B', '27/01/01');
+    await add('A', '27/02/01');
+    const categories = () =>
+      [...container.querySelectorAll('.stock-table tbody td.col-category')].map(
+        (td) => td.textContent,
+      );
+    expect(categories()).toEqual(['B', 'A']);
+
+    const sortButton = (label: string) =>
+      [...container.querySelectorAll('.sort-header')].find((b) => b.textContent?.startsWith(label));
+    await click(sortButton('種類'));
+    expect(categories()).toEqual(['A', 'B']);
+    await click(sortButton('種類'));
+    expect(categories()).toEqual(['B', 'A']);
+    expect(stored().settings.stockSort).toEqual({
+      order: ['category', 'expiry', 'added'],
+      desc: { expiry: false, category: true, added: false },
+    });
+
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<App />));
+    expect(categories()).toEqual(['B', 'A']);
+    expect(container.querySelector('th[aria-sort]')?.getAttribute('aria-sort')).toBe('descending');
+  });
+
+  it('rejects a malformed best-before date', async () => {
+    const form = container.querySelectorAll('form.inline-form')[0];
+    const expiry = form.querySelectorAll('input')[3] as HTMLInputElement;
+    expect(expiry.placeholder).toBe('YY/MM/DD');
+    await act(async () => type(expiry, '23/13/01'));
+    expect(expiry.getAttribute('aria-invalid')).toBe('true');
+    await click(form.querySelector('button[type=submit]'));
+    expect(stored().stocks ?? []).toEqual([]);
+  });
+
+  it('adds an overall chart that totals every category', async () => {
+    const [stockForm, targetForm] = container.querySelectorAll('form.inline-form');
+    const stockInputs = stockForm.querySelectorAll('input');
+    const targetInputs = targetForm.querySelectorAll('input');
+    for (const [category, count, goal] of [
+      ['A', '2', '3'],
+      ['B', '1', '5'],
+    ]) {
+      await act(async () => {
+        type(stockInputs[0], category);
+        type(stockInputs[2], count);
+        type(stockInputs[3], '27/01/01');
+      });
+      await click(stockForm.querySelector('button[type=submit]'));
+      await act(async () => {
+        type(targetInputs[0], category);
+        type(targetInputs[1], goal);
+      });
+      await click(targetForm.querySelector('button[type=submit]'));
+    }
+    const cards = [...container.querySelectorAll('.chart-card h3')].map((h) => h.textContent);
+    expect(cards[cards.length - 1]).toBe('全体');
+    const overall = container.querySelector('.chart-overall .chart-sub')?.textContent;
+    expect(overall).toContain('在庫 3');
+    expect(overall).toContain('目標 8');
+    expect(overall).toContain('あと 5');
   });
 
   it('stores the chart start date', async () => {

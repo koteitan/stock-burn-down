@@ -3,13 +3,15 @@ import { isIsoDate } from './date';
 import {
   categoriesByUpdate,
   categoriesOf,
+  clickSort,
   mergeLists,
   parseCount,
+  sortStocks,
   touchChanged,
   upsertTarget,
 } from './lists';
 import { sanitizeLists } from './sanitize';
-import type { Lists, StockItem, TargetItem } from './types';
+import { DEFAULT_STOCK_SORT, type Lists, type StockItem, type TargetItem } from './types';
 
 const s = (id: string, category = '缶詰'): StockItem => ({
   id,
@@ -90,6 +92,42 @@ describe('lists', () => {
     const touched = touchChanged(prev, next, 5);
     expect(Object.hasOwn(touched.updatedAt, '__proto__')).toBe(true);
     expect(categoriesByUpdate(touched)).toEqual(['__proto__']);
+  });
+
+  it('sorts by best-before, category, then added order by default', () => {
+    const stocks = [
+      { ...s('a', '水'), expiry: '2027-02-01' },
+      { ...s('b', '缶詰'), expiry: '2027-01-01', addedDate: '2026-11-05' },
+      { ...s('c', '缶詰'), expiry: '2027-01-01', addedDate: '2026-11-02' },
+      { ...s('d', '缶詰'), expiry: '2027-01-01', addedDate: '2026-11-02' },
+      { ...s('e', 'レトルト'), expiry: '2027-01-01' },
+    ];
+    expect(sortStocks(stocks, DEFAULT_STOCK_SORT).map((x) => x.id)).toEqual([
+      'e',
+      'c',
+      'd',
+      'b',
+      'a',
+    ]);
+  });
+
+  it('moves a clicked key to the top and flips the top key', () => {
+    const byCategory = clickSort(DEFAULT_STOCK_SORT, 'category');
+    expect(byCategory.order).toEqual(['category', 'expiry', 'added']);
+    expect(byCategory.desc.category).toBe(false);
+    const flipped = clickSort(byCategory, 'category');
+    expect(flipped.order).toEqual(['category', 'expiry', 'added']);
+    expect(flipped.desc.category).toBe(true);
+    const byAdded = clickSort(flipped, 'added');
+    expect(byAdded.order).toEqual(['added', 'category', 'expiry']);
+    expect(byAdded.desc).toEqual({ expiry: false, category: true, added: false });
+
+    const stocks = [s('x', 'A'), s('y', 'B'), s('z', 'A')];
+    expect(sortStocks(stocks, clickSort(byAdded, 'added')).map((x) => x.id)).toEqual([
+      'z',
+      'y',
+      'x',
+    ]);
   });
 
   it('keeps one target per category', () => {

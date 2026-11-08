@@ -1,10 +1,11 @@
 import { useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { formatDate, toDay } from '../date';
-import { compareStock, parseCount } from '../lists';
-import type { StockItem } from '../types';
+import { formatDate, formatShortDate, parseShortDate, toDay } from '../date';
+import { clickSort, parseCount, sortStocks } from '../lists';
+import type { StockItem, StockSort, StockSortKey } from '../types';
 import type { StockInput } from '../useStore';
 import { CATEGORY_LIST_ID } from './CategoryList';
+import { ExpiryInput } from './ExpiryInput';
 
 const SOON_DAYS = 30;
 
@@ -23,10 +24,41 @@ function ExpiryBadge({ expiry, today }: { expiry: string; today: number }) {
   return null;
 }
 
+function SortHeader(props: {
+  sortKey: StockSortKey;
+  label: string;
+  sort: StockSort;
+  onSortChange: (sort: StockSort) => void;
+  className?: string;
+}) {
+  const { sortKey, sort } = props;
+  const top = sort.order[0] === sortKey;
+  const desc = sort.desc[sortKey];
+  return (
+    <th
+      className={props.className}
+      aria-sort={top ? (desc ? 'descending' : 'ascending') : undefined}
+    >
+      <button
+        className={`sort-header${top ? ' sort-top' : ''}`}
+        onClick={() => props.onSortChange(clickSort(sort, sortKey))}
+      >
+        {props.label}
+        <span className="sort-mark" aria-hidden="true">
+          {desc ? '▼' : '▲'}
+          <sub>{sort.order.indexOf(sortKey) + 1}</sub>
+        </span>
+      </button>
+    </th>
+  );
+}
+
 export function StockTable(props: {
   stocks: StockItem[];
   today: number;
   disabled: boolean;
+  sort: StockSort;
+  onSortChange: (sort: StockSort) => void;
   onConsume: (id: string) => void;
   onUpdate: (id: string, input: StockInput) => void;
   onDelete: (id: string) => void;
@@ -37,22 +69,23 @@ export function StockTable(props: {
 
   if (props.stocks.length === 0) return <p className="empty">{t('emptyStocks')}</p>;
 
+  const draftExpiry = parseShortDate(draft.expiry);
   const startEdit = (s: StockItem) => {
     setEditing(s.id);
     setDraft({
       category: s.category,
       content: s.content,
       count: String(s.count),
-      expiry: s.expiry,
+      expiry: formatShortDate(s.expiry),
     });
   };
   const save = () => {
-    if (!editing || !draft.expiry) return;
+    if (!editing || !draftExpiry) return;
     props.onUpdate(editing, {
       category: draft.category.trim(),
       content: draft.content.trim(),
       count: parseCount(draft.count),
-      expiry: draft.expiry,
+      expiry: draftExpiry,
     });
     setEditing(null);
   };
@@ -62,19 +95,28 @@ export function StockTable(props: {
   };
   const set = (key: keyof Draft) => (e: { target: { value: string } }) =>
     setDraft((d) => ({ ...d, [key]: e.target.value }));
+  const header = (sortKey: StockSortKey, label: string, className?: string) => (
+    <SortHeader
+      sortKey={sortKey}
+      label={label}
+      sort={props.sort}
+      onSortChange={props.onSortChange}
+      className={className}
+    />
+  );
 
-  const rows = [...props.stocks].sort(compareStock);
+  const rows = sortStocks(props.stocks, props.sort);
 
   return (
     <div className="table-wrap">
-      <table>
+      <table className="stock-table">
         <thead>
           <tr>
-            <th>{t('field.addedDate')}</th>
-            <th>{t('field.category')}</th>
-            <th>{t('field.content')}</th>
+            {header('added', t('field.addedDate'))}
+            {header('category', t('field.category'), 'col-category')}
+            <th className="col-content">{t('field.content')}</th>
             <th className="num">{t('field.count')}</th>
-            <th>{t('field.expiry')}</th>
+            {header('expiry', t('field.expiry'))}
             <th>{t('field.consume')}</th>
             <th>{t('field.edit')}</th>
           </tr>
@@ -84,23 +126,21 @@ export function StockTable(props: {
             editing === s.id ? (
               <tr key={s.id} className="editing">
                 <td>{formatDate(s.addedDate)}</td>
-                <td>
+                <td className="col-category">
                   <input
                     value={draft.category}
                     onChange={set('category')}
                     onKeyDown={onKey}
                     list={CATEGORY_LIST_ID}
-                    size={8}
                     aria-label={t('field.category')}
                     autoFocus
                   />
                 </td>
-                <td>
+                <td className="col-content">
                   <input
                     value={draft.content}
                     onChange={set('content')}
                     onKeyDown={onKey}
-                    size={12}
                     aria-label={t('field.content')}
                   />
                 </td>
@@ -117,18 +157,16 @@ export function StockTable(props: {
                   />
                 </td>
                 <td>
-                  <input
-                    type="date"
-                    required
+                  <ExpiryInput
                     value={draft.expiry}
-                    onChange={set('expiry')}
+                    onChange={(expiry) => setDraft((d) => ({ ...d, expiry }))}
                     onKeyDown={onKey}
-                    aria-label={t('field.expiry')}
+                    ariaLabel={t('field.expiry')}
                   />
                 </td>
                 <td />
                 <td className="actions">
-                  <button onClick={save} disabled={props.disabled || !draft.expiry}>
+                  <button onClick={save} disabled={props.disabled || !draftExpiry}>
                     {t('action.done')}
                   </button>
                   <button onClick={() => setEditing(null)}>{t('action.cancel')}</button>
@@ -144,11 +182,11 @@ export function StockTable(props: {
             ) : (
               <tr key={s.id}>
                 <td>{formatDate(s.addedDate)}</td>
-                <td>{s.category}</td>
-                <td>{s.content}</td>
+                <td className="col-category">{s.category}</td>
+                <td className="col-content">{s.content}</td>
                 <td className="num">{s.count}</td>
                 <td>
-                  {formatDate(s.expiry)} <ExpiryBadge expiry={s.expiry} today={props.today} />
+                  {formatShortDate(s.expiry)} <ExpiryBadge expiry={s.expiry} today={props.today} />
                 </td>
                 <td>
                   <button onClick={() => props.onConsume(s.id)} disabled={props.disabled}>
