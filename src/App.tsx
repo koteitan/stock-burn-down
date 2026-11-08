@@ -1,0 +1,116 @@
+import { useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { AddStockForm } from './components/AddStockForm';
+import { CategoryList } from './components/CategoryList';
+import { Charts } from './components/Charts';
+import { HistoryTable } from './components/HistoryTable';
+import { Menu } from './components/Menu';
+import { StockTable } from './components/StockTable';
+import { TargetSection } from './components/TargetSection';
+import { dayOfTime } from './chart';
+import { formatDate, toDay, todayIso } from './date';
+import { categoriesOf } from './lists';
+import type { Theme } from './types';
+import { useStore } from './useStore';
+
+function useTheme(theme: Theme) {
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      document.documentElement.dataset.theme =
+        theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme;
+    };
+    apply();
+    if (theme !== 'system') return;
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, [theme]);
+}
+
+export function App() {
+  const { t, i18n } = useTranslation();
+  const { settings, updateSettings, lists, nostrStatus, editable, actions } = useStore();
+  const today = useMemo(() => toDay(todayIso()), []);
+  const categories = categoriesOf(lists);
+
+  useTheme(settings.theme);
+  useEffect(() => {
+    // changeLanguage() emits languageChanged even for the current language, which re-renders.
+    if (i18n.language !== settings.lang) void i18n.changeLanguage(settings.lang);
+    document.documentElement.lang = settings.lang;
+  }, [i18n, settings.lang]);
+  useEffect(() => {
+    document.title = t('title');
+  }, [t]);
+
+  const status = settings.storage === 'nostr' && nostrStatus ? nostrStatus : null;
+  const start = toDay(settings.chartStart);
+  const oldRecords = lists.history.filter((h) => dayOfTime(h.at) < start).length;
+
+  return (
+    <>
+      <header className="app-header">
+        <h1>{t('title')}</h1>
+        {status && (
+          <span className={`nostr-status status-${status}`} role="status">
+            {t(`status.${status}`)}
+          </span>
+        )}
+        <Menu settings={settings} onChange={updateSettings} />
+      </header>
+      <main>
+        <Charts
+          lists={lists}
+          chartStart={settings.chartStart}
+          onChartStartChange={(chartStart) => updateSettings({ chartStart })}
+        />
+
+        <h2>{t('section.add')}</h2>
+        <AddStockForm disabled={!editable} onAdd={actions.addStock} />
+        {!editable && status === 'loading' && <p className="note">{t('readOnly')}</p>}
+
+        <h2>{t('section.stocks')}</h2>
+        <StockTable
+          stocks={lists.stocks}
+          today={today}
+          disabled={!editable}
+          onConsume={actions.consumeOne}
+          onUpdate={actions.updateStock}
+          onDelete={actions.deleteStock}
+        />
+
+        <h2>{t('section.targets')}</h2>
+        <TargetSection
+          targets={lists.targets}
+          disabled={!editable}
+          onAdd={actions.addTarget}
+          onUpdate={actions.updateTarget}
+          onDelete={actions.deleteTarget}
+        />
+        <h2>{t('section.history')}</h2>
+        <p>
+          <button
+            className="danger"
+            disabled={!editable || oldRecords === 0}
+            onClick={() => {
+              const message = t('deleteBeforeStartConfirm', {
+                date: formatDate(settings.chartStart),
+                n: oldRecords,
+              });
+              if (window.confirm(message)) actions.deleteRecordsBefore(start);
+            }}
+          >
+            {t('action.deleteBeforeStart')}
+          </button>
+        </p>
+        <HistoryTable
+          history={lists.history}
+          disabled={!editable}
+          onUpdate={actions.updateRecord}
+          onDelete={actions.deleteRecord}
+        />
+        <CategoryList categories={categories} />
+      </main>
+    </>
+  );
+}

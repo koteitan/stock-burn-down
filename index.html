@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="備蓄（缶詰・レトルト・水など）のバーンダウンチャート" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%231a1a19'/%3E%3Cpath d='M5 7 L13 13 L13 17 L21 21 L27 27' fill='none' stroke='%233987e5' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M5 9 H27' stroke='%23d95926' stroke-width='2' stroke-dasharray='3 2'/%3E%3C/svg%3E"
+    />
+    <title>備蓄バーンダウンチャート</title>
+    <script>
+      try {
+        var s = JSON.parse(localStorage.getItem('stock-burn-down') || '{}').settings || {};
+        var th = s.theme || 'dark';
+        if (th === 'system') th = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.theme = th === 'light' ? 'light' : 'dark';
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
