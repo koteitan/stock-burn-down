@@ -16,9 +16,9 @@ Site: https://koteitan.github.io/stock-burn-down/
    - The quantity in the stock list drops by 1. A row that reaches 0 is removed.
    - One row (consumed at, category, content, qty, best before) is added to the consumption history.
 4. [Edit] turns the row into input fields, and its buttons become [Done] [Cancel] [Delete] (in the stock list, target list and consumption history alike).
-   - [Done]: overwrite the row with the input.
-   - [Cancel]: close without changing anything.
-   - [Delete]: delete the row. Deleting a history row does not put the quantity back in the stock list.
+   - [Done] overwrites the row with the input.
+   - [Cancel] closes without changing anything.
+   - [Delete] deletes the row. Deleting a history row does not put the quantity back in the stock list.
 5. The consumption history is grouped by category. [Delete history before the chart start] in a group's header row deletes, after a confirmation, that category's records made before the chart start date.
 
 ### Stock list order
