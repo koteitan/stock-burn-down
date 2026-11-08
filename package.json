@@ -1,7 +1,7 @@
 {
   "name": "stock-burn-down",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Burn-down chart for emergency food and water stockpiles",
   "license": "MIT",

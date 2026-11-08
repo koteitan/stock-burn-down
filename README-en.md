@@ -54,7 +54,7 @@ One chart per category is drawn over the "Chart range [start] -- [end]" above th
 - Language: Japanese / English
 - Storage:
   - Browser: saved to this browser's localStorage.
-  - nostr network (encrypted): encrypted and signed with a NIP-07 browser extension (nos2x, Alby, etc.) and saved to nostr relays. Other devices with the same key see the same data.
+  - nostr network (kind:30078, NIP-04 encrypted): encrypted and signed with a NIP-07 browser extension (nos2x, Alby, etc.) and saved to nostr relays. Other devices with the same key see the same data.
 - github / License
 
 When the storage is nostr, a status is shown next to the title.
